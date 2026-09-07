@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { JWTTokenPayload, getMK8TokenEx } from "@/helpers/types/JWTTokenPayload";
-import { amkj_grpc_client } from "@/helpers/grpc";
-import { Metadata } from "nice-grpc";
-import app_config from "@/app.config";
-import { KickAllUsersResponse } from "@/helpers/proto/amkj_service";
+import { amkjGrpcClientWithToken } from "@/helpers/grpc";
+import { KickAllUsersResponse } from "@/helpers/proto/generated/amkj_service";
 
 export async function POST(request: Request) {
     try {
-        const cookieStore = cookies();
+        const cookieStore = await cookies();
         const mk8_token = cookieStore.get("mk8_token");
         if (!mk8_token) {
             return new NextResponse("{}", { status: 401 });
@@ -19,11 +17,7 @@ export async function POST(request: Request) {
             return new NextResponse("{}", { status: 401 });
         }
 
-        const res = await amkj_grpc_client.kickAllUsers({}, {
-            metadata: Metadata({
-                "X-API-Key": app_config.grpc_api_key
-            })
-        });
+        const res = await amkjGrpcClientWithToken.kickAllUsers({});
 
         return NextResponse.json(res as KickAllUsersResponse);
 

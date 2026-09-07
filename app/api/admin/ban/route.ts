@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { JWTTokenPayload, getMK8TokenEx } from "@/helpers/types/JWTTokenPayload";
-import { amkj_grpc_client } from "@/helpers/grpc";
-import { Metadata } from "nice-grpc";
-import app_config from "@/app.config";
-import { ClearBanRequest, ClearBanResponse, IssueBanRequest, IssueBanResponse } from "@/helpers/proto/amkj_service";
+import { amkjGrpcClientWithToken } from "@/helpers/grpc";
+import { ClearBanRequest, ClearBanResponse, IssueBanRequest, IssueBanResponse } from "@/helpers/proto/generated/amkj_service";
 
 export async function POST(request: Request) {
 	try {
-		const cookieStore = cookies();
+		const cookieStore = await cookies();
 		const mk8_token = cookieStore.get("mk8_token");
 		if (!mk8_token) {
 			return new NextResponse("{}", { status: 401 });
@@ -25,11 +23,7 @@ export async function POST(request: Request) {
 			data.endTime = new Date(data.endTime as unknown as string);
 		}
 
-		const res = await amkj_grpc_client.issueBan(data, {
-			metadata: Metadata({
-				"X-API-Key": app_config.grpc_api_key,
-			}),
-		});
+		const res = await amkjGrpcClientWithToken.issueBan(data);
 
 		return NextResponse.json(res as IssueBanResponse);
 	} catch (err) {
@@ -40,7 +34,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
 	try {
-		const cookieStore = cookies();
+		const cookieStore = await cookies();
 		const mk8_token = cookieStore.get("mk8_token");
 		if (!mk8_token) {
 			return new NextResponse("{}", { status: 401 });
@@ -52,11 +46,7 @@ export async function PATCH(request: Request) {
 		}
 
 		const data: ClearBanRequest = await request.json();
-		const res = await amkj_grpc_client.clearBan(data, {
-			metadata: Metadata({
-				"X-API-Key": app_config.grpc_api_key,
-			}),
-		});
+		const res = await amkjGrpcClientWithToken.clearBan(data);
 
 		return NextResponse.json(res as ClearBanResponse);
 	} catch (err) {

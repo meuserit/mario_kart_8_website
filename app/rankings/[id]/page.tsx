@@ -1,12 +1,13 @@
 "use client";
 
-import { GetTimeTrialRankingResponse, TimeTrialRanking } from "@/helpers/proto/amkj_service";
+import { GetTimeTrialRankingResponse, TimeTrialRanking } from "@/helpers/proto/generated/amkj_service";
 import TrackList from "@/helpers/types/TrackList";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Alert, Form, Spinner, Table } from "react-bootstrap";
 
-export default function TrackRankingPage({ params }: { params: { id: string } }) {
-
+export default function TrackRankingPage() {
+    const params = useParams<{ id: string }>();
     const [rankingResponse, setRankingResponse] = useState<Response | null>(null);
 
     const [worstRankings, setWorstRankings] = useState<TimeTrialRanking[]>([]);
@@ -73,6 +74,7 @@ export default function TrackRankingPage({ params }: { params: { id: string } })
     }
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchRankings(filterAsc);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filterAsc]);

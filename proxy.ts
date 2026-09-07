@@ -1,20 +1,15 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { type JWTTokenPayload, getMK8Token, getMK8TokenFromAccountAPI } from "./helpers/types/JWTTokenPayload";
+import { type JWTTokenPayload, getMK8Token, getMK8TokenFromAccountAPI, getMiiImageFromPid } from "./helpers/types/JWTTokenPayload";
 
-export async function middleware(request: NextRequest) {
+const skipProxy = [
+	'/api/exchange-token'
+]
+
+export async function proxy(request: NextRequest) {
 	const nextPathname = request.nextUrl.pathname;
-	const allowedPIDs: number[] = [1606041002, 1628534996]; // PretendoRambo3, PN_Rambo2 -- In addition to access_level >= 3
-
-	if (nextPathname.startsWith("/logout")) {
-		const url = new URL("/", request.url);
-		const response = NextResponse.redirect(url);
-
-		response.cookies.set("mk8_token", "", { maxAge: 0, domain: ".pretendo.network" });
-		response.cookies.set("access_token", "", { maxAge: 0, domain: ".pretendo.network" });
-		response.cookies.set("refresh_token", "", { maxAge: 0, domain: ".pretendo.network" });
-		response.cookies.set("token_type", "", { maxAge: 0, domain: ".pretendo.network" });
-		return response;
+	if (skipProxy.includes(nextPathname)) {
+		return NextResponse.next();
 	}
 
 	const hostname = request.nextUrl.hostname;
@@ -45,7 +40,7 @@ export async function middleware(request: NextRequest) {
 		if (mk8_token) {
 			if (nextPathname.startsWith("/api/admin/userdata")) {
 				return NextResponse.next();
-			} else if (mk8_token.access_level >= 3 || allowedPIDs.includes(mk8_token.pid)) {
+			} else if (mk8_token.access_level >= 3) {
 				return NextResponse.next();
 			} else {
 				return new NextResponse("{}", { status: 401 });
@@ -57,7 +52,7 @@ export async function middleware(request: NextRequest) {
 
 	if (nextPathname.startsWith("/admin")) {
 		if (mk8_token) {
-			const isAdmin = mk8_token.access_level >= 3 || allowedPIDs.includes(mk8_token.pid);
+			const isAdmin = mk8_token.access_level >= 3;
 			if (!isAdmin) {
 				var response = NextResponse.redirect(new URL("/", request.url));
 			} else {
@@ -66,10 +61,10 @@ export async function middleware(request: NextRequest) {
 
 			response.headers.set("X-MK8-Pretendo-ACL", mk8_token.access_level.toString());
 			response.headers.set("X-MK8-Pretendo-Username", mk8_token.pnid);
-			response.headers.set("X-MK8-Pretendo-ImageURL", mk8_token.mii_image_url);
+			response.headers.set("X-MK8-Pretendo-ImageURL", getMiiImageFromPid(mk8_token.pid));
 			response.headers.set("X-MK8-Pretendo-PID", mk8_token.pid.toString());
 			if (res) {
-				response.cookies.set("mk8_token", res.jwt_token, { domain: ".pretendo.network" });
+				response.cookies.set("mk8_token", res.jwt_token, { sameSite: 'strict', httpOnly: true });
 			}
 			return response;
 		} else {
@@ -84,15 +79,15 @@ export async function middleware(request: NextRequest) {
 		if (mk8_token) {
 			response.headers.set("X-MK8-Pretendo-ACL", mk8_token.access_level.toString());
 			response.headers.set("X-MK8-Pretendo-Username", mk8_token.pnid);
-			response.headers.set("X-MK8-Pretendo-ImageURL", mk8_token.mii_image_url);
+			response.headers.set("X-MK8-Pretendo-ImageURL", getMiiImageFromPid(mk8_token.pid));
 			response.headers.set("X-MK8-Pretendo-PID", mk8_token.pid.toString());
 		}
 		if (res) {
-			response.cookies.set("mk8_token", res.jwt_token, { domain: ".pretendo.network" });
+			response.cookies.set("mk8_token", res.jwt_token, { sameSite: 'strict', httpOnly: true });
 		}
 		return response;
 	}
 }
 export const config = {
-	matcher: ["/", "/logout", "/api/:path*", "/admin/:path*", "/dashboard/:path*", "/tournaments/:path*", "/gatherings/:path*", "/rankings/:path*"],
+	matcher: ["/", "/api/:path*", "/admin/:path*", "/dashboard/:path*", "/tournaments/:path*", "/gatherings/:path*", "/rankings/:path*"],
 };

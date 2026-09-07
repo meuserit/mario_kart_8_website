@@ -1,7 +1,7 @@
 'use client'
 
 import { GatheringEntry } from '@/components/GatheringEntry';
-import { Gathering } from '@/helpers/proto/amkj_service';
+import { Gathering } from '@/helpers/proto/generated/amkj_service';
 import { useEffect, useState } from 'react';
 import { Alert, Spinner } from 'react-bootstrap';
 
@@ -46,7 +46,6 @@ export default function GatheringsPage() {
         }, 1000);
 
         return () => clearInterval(timerInterval);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
 

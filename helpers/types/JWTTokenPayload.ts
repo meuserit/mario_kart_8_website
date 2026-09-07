@@ -1,15 +1,19 @@
 import type { NextRequest } from 'next/server'
 import app_config from '@/app.config';
-import { SignJWT, jwtVerify } from 'jose';
+import { JWSAlgorithm, SignJWT, jwtVerify } from 'jose';
 import { nanoid } from 'nanoid';
+import { legacyApiGrpcClient } from '../grpc';
+import { Metadata } from 'nice-grpc';
 
 export type JWTTokenPayload = {
     access_level: number;
     server_access_level: string;
     pnid: string;
     pid: number;
-    mii_image_url: string;
 }
+
+const alg: JWSAlgorithm = 'HS256';
+const jwtSecret = new TextEncoder().encode(app_config.jwt_secret);
 
 export async function getMK8Token(request: NextRequest): Promise<JWTTokenPayload | null> {
     const mk8_token = request.cookies.get("mk8_token")?.value;
@@ -18,8 +22,10 @@ export async function getMK8Token(request: NextRequest): Promise<JWTTokenPayload
     }
 
     try {
-        const verifyResult = await jwtVerify(mk8_token, new TextEncoder().encode(app_config.jwt_secret));
-        return verifyResult.payload as JWTTokenPayload;
+        const verifyResult = await jwtVerify<JWTTokenPayload>(mk8_token, jwtSecret, {
+            algorithms: [alg]
+        });
+        return verifyResult.payload;
     } catch (error) { }
 
     return null;
@@ -27,49 +33,77 @@ export async function getMK8Token(request: NextRequest): Promise<JWTTokenPayload
 
 export async function getMK8TokenEx(mk8_token: string): Promise<JWTTokenPayload | null> {
     try {
-        const verifyResult = await jwtVerify(mk8_token, new TextEncoder().encode(app_config.jwt_secret));
-        return verifyResult.payload as JWTTokenPayload;
+        const verifyResult = await jwtVerify<JWTTokenPayload>(mk8_token, jwtSecret, {
+            algorithms: [alg],
+        });
+        return verifyResult.payload;
     } catch (error) { }
 
     return null;
 }
 
-export async function getMK8TokenFromAccountAPI(request: NextRequest): Promise<{ token: JWTTokenPayload, jwt_token: string } | null> {
+async function getUserdataFromToken(token: string): Promise<JWTTokenPayload | null> {
+    try {
+        const response = await fetch(`http://127.0.0.1:${app_config.serverPort}/api/exchange-token`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                secret: app_config.internal_secret_key,
+                token,
+            }),
+        });
+        if (response.status !== 200) throw new Error("Status is not 200 for token exchange");
+        const json = await response.json();
+        return json as JWTTokenPayload;
+    } catch (err) {
+        console.error(err);
+        return null;
+    }
+}
 
-    const token_type = request.cookies.get("token_type")?.value;
+export async function buildUserdataFromGrpc(token: string): Promise<JWTTokenPayload> {
+    const userData = await legacyApiGrpcClient.getUserData({}, {
+        metadata: Metadata({
+            "X-API-Key": app_config.account_grpc_api_key,
+            "X-Token": token
+        })
+    })
+    return {
+        access_level: userData.accessLevel,
+        server_access_level: userData.serverAccessLevel,
+        pnid: userData.username,
+        pid: userData.pid
+    }
+}
+
+export async function getMK8TokenFromAccountAPI(request: NextRequest): Promise<{ token: JWTTokenPayload, jwt_token: string } | null> {
     const access_token = request.cookies.get("access_token")?.value;
 
-    if (!token_type || !access_token) {
+    if (!access_token) {
         return null;
     }
 
     try {
-        var res = await fetch("https://api.pretendo.cc/v1/user", {
-            headers: {
-                "Authorization": `${token_type} ${access_token}`
-            }
-        })
-
-        if (res.status == 200) {
-            const userData = await res.json();
-            const token_data: JWTTokenPayload = {
-                access_level: userData["access_level"],
-                server_access_level: userData["server_access_level"],
-                pnid: userData["username"],
-                pid: userData["pid"],
-                mii_image_url: userData["mii"]["image_url"],
-            }
-
-            const token = await new SignJWT(token_data)
-                .setProtectedHeader({ alg: 'HS256' })
-                .setJti(nanoid())
-                .setIssuedAt()
-                .setExpirationTime('2h')
-                .sign(new TextEncoder().encode(app_config.jwt_secret));
-
-            return { token: token_data, jwt_token: token };
+        const token_data = await getUserdataFromToken(access_token);
+        if (!token_data) {
+            return null;
         }
+
+        const token = await new SignJWT(token_data)
+            .setProtectedHeader({ alg })
+            .setJti(nanoid())
+            .setIssuedAt()
+            .setExpirationTime('2h')
+            .sign(jwtSecret);
+
+        return { token: token_data, jwt_token: token };
     } catch (error) { }
 
     return null;
+}
+
+export function getMiiImageFromPid(pid: number) {
+    return `${app_config.cdn_base_url}/mii/${pid}/normal_face.png`
 }

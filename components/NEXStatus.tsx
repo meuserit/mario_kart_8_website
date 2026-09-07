@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link';
-import { GetServerStatusResponse } from '@/helpers/proto/amkj_service';
+import { GetServerStatusResponse } from '@/helpers/proto/generated/amkj_service';
 import { useEffect, useState } from 'react';
 import Spinner from 'react-bootstrap/Spinner';
 import { StaticToast } from './StaticToast';
@@ -28,10 +28,10 @@ export const NEXStatus: React.FC<NEXStatusProps> = ({ responseHeaderCallback }) 
     }
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchNEXStatus();
         const interval = setInterval(fetchNEXStatus, 10000);
         return () => clearInterval(interval);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {
